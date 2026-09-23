@@ -2,12 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 
-# arquivos do usuário
-input/*
-output/*
-!input/.gitkeep
-!output/.gitkeep
-
 # build
 build/
 *.spec
