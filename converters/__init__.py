@@ -7,7 +7,7 @@ e adicione-o à lista _MODULES abaixo. O menu é montado automaticamente.
 
 from pathlib import Path
 
-from . import data, images, pdf, text
+from . import data, images, pdf, sheets, text
 from .base import Conversion
 
 _MODULES = [
@@ -15,6 +15,7 @@ _MODULES = [
     images,
     text,
     data,
+    sheets,
 ]
 
 CONVERTERS: dict[tuple[str, str], Conversion] = {

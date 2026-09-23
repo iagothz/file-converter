@@ -7,6 +7,8 @@ Cada módulo define:
         do que foi removido (lista vazia se não havia nada).
         `comments` pede para remover também comentários/anotações,
         quando o formato tiver.
+    def inspect(src: Path) -> dict[str, str]
+        metadados encontrados, sem alterar nada.
 Para adicionar formatos, crie um módulo e inclua-o em _MODULES.
 """
 
@@ -21,6 +23,7 @@ _MODULES = [
 ]
 
 CLEANERS = {ext: m.clean for m in _MODULES for ext in m.EXTENSIONS}
+INSPECTORS = {ext: m.inspect for m in _MODULES for ext in m.EXTENSIONS}
 
 
 def extensions() -> tuple[str, ...]:
@@ -34,3 +37,7 @@ def formats() -> list[str]:
 
 def find(path: Path):
     return CLEANERS.get(path.suffix.lower())
+
+
+def inspector(path: Path):
+    return INSPECTORS.get(path.suffix.lower())

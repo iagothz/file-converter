@@ -95,3 +95,37 @@ def clean(src: Path, dest: Path, comments: bool = False) -> list[str]:
     if stats["revisions"]:
         removed.append(f"alterações controladas aceitas ({stats['revisions']})")
     return list(dict.fromkeys(removed))
+
+
+def inspect(src: Path) -> dict[str, str]:
+    found = {}
+    with zipfile.ZipFile(src) as z:
+        names = set(z.namelist())
+
+        def read(name):
+            return z.read(name).decode("utf-8") if name in names else ""
+
+        root = CORE_ROOT.search(read("docProps/core.xml"))
+        for m in CORE_ELEMENT.finditer(root.group(1) if root else ""):
+            if (m.group(3) or "").strip():
+                found[CORE_LABELS.get(m.group(2), m.group(2))] = m.group(3).strip()
+        app = read("docProps/app.xml")
+        for tag, label in APP_LABELS.items():
+            m = re.search(rf"<{tag}>(.*?)</{tag}>", app, re.S)
+            if m and m.group(1).strip():
+                found[label] = m.group(1).strip()
+        for m in CUSTOM_PROPERTY.finditer(read("docProps/custom.xml")):
+            found[f"propriedade personalizada ({m.group(1)})"] = re.sub(r"<[^>]+>", "", m.group(0)).strip()
+
+        if src.suffix.lower() == ".docx":
+            comments = read("word/comments.xml")
+            if comments:
+                found["comentários"] = str(comments.count("<w:comment "))
+            body = read("word/document.xml")
+            revisions = len(re.findall(r"<w:(?:ins|del|moveFrom|moveTo) ", body))
+            if revisions:
+                found["alterações controladas"] = str(revisions)
+            authors = set(re.findall(r'w:author="([^"]*)"', comments + body))
+            if authors:
+                found["autores de comentários/alterações"] = ", ".join(sorted(authors))
+    return found

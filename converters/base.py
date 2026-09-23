@@ -5,12 +5,21 @@ from typing import Any, Callable
 
 @dataclass(frozen=True)
 class Option:
-    """Opção configurável de um conversor, exibida no menu."""
+    """Opção configurável de um conversor ou ferramenta, exibida no menu.
+
+    O campo na tela depende da opção: `type=bool` vira caixa de marcar,
+    `choices` vira lista, `secret` esconde o texto (senha) e `file` ganha
+    um botão para escolher arquivo.
+    """
 
     key: str
     label: str
     default: Any
     type: type = str
+    choices: tuple = ()
+    secret: bool = False
+    file: bool = False
+    hint: str = ""
 
 
 @dataclass(frozen=True)

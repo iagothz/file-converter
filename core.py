@@ -13,6 +13,11 @@ import converters
 from converters.base import unique
 
 Log = Callable[[str], None]
+Progress = Callable[[int, int], None]
+
+
+def _no_progress(done: int, total: int) -> None:
+    pass
 
 
 def _dest_dir(src: Path, out_dir: Path | None) -> Path:
@@ -28,7 +33,7 @@ def _describe(written: list[Path]) -> str:
 
 
 def run(source: str, target: str, files: list[Path], out_dir: Path | None = None,
-        opts: dict | None = None, log: Log = print) -> tuple[int, int]:
+        opts: dict | None = None, log: Log = print, progress: Progress = _no_progress) -> tuple[int, int]:
     """Converte os arquivos `source` da lista para `target`.
 
     Retorna (convertidos, com erro). Arquivos de outro formato são ignorados.
@@ -38,8 +43,10 @@ def run(source: str, target: str, files: list[Path], out_dir: Path | None = None
         raise ValueError(f"Sem conversor de {source} para {target}")
 
     exts = converters.extensions(source)
+    files = [Path(f) for f in files]
     ok = failed = 0
-    for src in map(Path, files):
+    for i, src in enumerate(files):
+        progress(i, len(files))
         if src.suffix.lower() not in exts:
             log(f"[ignorado] {src.name}: não é .{source}")
             continue
@@ -51,19 +58,22 @@ def run(source: str, target: str, files: list[Path], out_dir: Path | None = None
             log(f"[erro] {src.name}: {e}")
             failed += 1
 
+    progress(len(files), len(files))
     log(f"Concluído: {ok} convertido(s), {failed} com erro.")
     return ok, failed
 
 
 def strip_metadata(files: list[Path], out_dir: Path | None = None, comments: bool = False,
-                   log: Log = print) -> tuple[int, int]:
+                   log: Log = print, progress: Progress = _no_progress) -> tuple[int, int]:
     """Grava cópias sem metadados dos arquivos da lista.
 
     Na pasta do original, a cópia recebe o sufixo "_sem-metadados";
     em outra pasta, mantém o nome. Retorna (processados, com erro).
     """
+    files = [Path(f) for f in files]
     ok = failed = 0
-    for src in map(Path, files):
+    for i, src in enumerate(files):
+        progress(i, len(files))
         clean = cleaners.find(src)
         if clean is None:
             log(f"[ignorado] {src.name}: formato não suportado")
@@ -82,5 +92,29 @@ def strip_metadata(files: list[Path], out_dir: Path | None = None, comments: boo
             log(f"[erro] {src.name}: {e}")
             failed += 1
 
+    progress(len(files), len(files))
     log(f"Concluído: {ok} arquivo(s), {failed} com erro.")
     return ok, failed
+
+
+def show_metadata(files: list[Path], log: Log = print, progress: Progress = _no_progress) -> None:
+    """Lista os metadados de cada arquivo, sem alterar nada."""
+    files = [Path(f) for f in files]
+    for i, src in enumerate(files):
+        progress(i, len(files))
+        inspect = cleaners.inspector(src)
+        if inspect is None:
+            log(f"[ignorado] {src.name}: formato não suportado")
+            continue
+        try:
+            found = inspect(src)
+        except Exception as e:
+            log(f"[erro] {src.name}: {e}")
+            continue
+        if not found:
+            log(f"{src.name}: nenhum metadado encontrado")
+            continue
+        log(f"{src.name}:")
+        for key, value in found.items():
+            log(f"    {key}: {value}")
+    progress(len(files), len(files))

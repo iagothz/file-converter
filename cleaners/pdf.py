@@ -44,3 +44,26 @@ def clean(src: Path, dest: Path, comments: bool = False) -> list[str]:
 
         doc.save(dest, garbage=3, deflate=True)
     return list(dict.fromkeys(removed))
+
+
+def inspect(src: Path) -> dict[str, str]:
+    found = {}
+    with pymupdf.open(src) as doc:
+        if doc.needs_pass:
+            return {"Aviso": "PDF protegido por senha"}
+        for key, value in doc.metadata.items():
+            if value and key in LABELS:
+                found[LABELS[key]] = value
+        if doc.get_xml_metadata():
+            found["XMP"] = "presente"
+        authors, annots = set(), 0
+        for page in doc:
+            for annot in page.annots():
+                annots += 1
+                if annot.info.get("title"):
+                    authors.add(annot.info["title"])
+        if annots:
+            found["anotações"] = str(annots)
+        if authors:
+            found["autor de anotações"] = ", ".join(sorted(authors))
+    return found

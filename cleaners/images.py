@@ -7,7 +7,7 @@ TIFF: a imagem é regravada só com os pixels (formato sem perda).
 
 from pathlib import Path
 
-from PIL import Image, ImageOps, ImageSequence
+from PIL import ExifTags, Image, ImageOps, ImageSequence
 
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff")
 
@@ -184,3 +184,50 @@ def _clean_tiff(src: Path, dest: Path) -> list[str]:
         kwargs["icc_profile"] = icc
     frames[0].save(dest, format="TIFF", save_all=True, append_images=frames[1:], **kwargs)
     return removed
+
+
+# ---- Visualização ---------------------------------------------------------
+
+def _gps_coordinate(values, ref) -> float:
+    d, m, s = (float(v) for v in values)
+    value = d + m / 60 + s / 3600
+    return -value if ref in ("S", "W") else value
+
+
+def _show(value) -> str:
+    if isinstance(value, bytes):
+        return f"<dados binários, {len(value)} bytes>"
+    text = str(value).strip().replace("\x00", "")
+    return text if len(text) <= 120 else text[:117] + "..."
+
+
+def inspect(src: Path) -> dict[str, str]:
+    """Metadados encontrados, como {nome: valor}."""
+    found = {}
+    with Image.open(src) as im:
+        exif = im.getexif()
+        for tag, value in exif.items():
+            if tag not in (ExifTags.Base.ExifOffset, ExifTags.Base.GPSInfo):
+                found[ExifTags.TAGS.get(tag, f"Tag {tag}")] = _show(value)
+        for tag, value in exif.get_ifd(ExifTags.IFD.Exif).items():
+            if tag not in (ExifTags.Base.MakerNote,):
+                found[ExifTags.TAGS.get(tag, f"Tag {tag}")] = _show(value)
+        gps = exif.get_ifd(ExifTags.IFD.GPSInfo)
+        if gps:
+            try:
+                lat = _gps_coordinate(gps[2], gps[1])
+                lon = _gps_coordinate(gps[4], gps[3])
+                found["GPS (localização)"] = f"{lat:.6f}, {lon:.6f}"
+            except (KeyError, TypeError, ValueError, ZeroDivisionError):
+                found["GPS (localização)"] = "presente"
+        for key, value in getattr(im, "text", {}).items():  # PNG
+            found[f"Texto: {key}"] = _show(value)
+        if im.info.get("comment"):
+            found["Comentário"] = _show(im.info["comment"])
+        if im.info.get("xmp") or b"ns.adobe.com/xap" in src.read_bytes()[:200_000]:
+            found["XMP"] = "presente"
+        if hasattr(im, "tag_v2"):  # TIFF
+            for tag, label in TIFF_TAGS.items():
+                if tag in im.tag_v2 and label not in ("EXIF", "GPS"):
+                    found[label] = _show(im.tag_v2[tag])
+    return found

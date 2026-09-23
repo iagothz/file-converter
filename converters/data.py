@@ -9,15 +9,25 @@ from .base import Conversion, Option, unique
 DELIMITER = Option("delimiter", "Separador do CSV", ",", str)
 
 
-def csv_to_json(src: Path, out_dir: Path) -> list[Path]:
-    dest = unique(out_dir / f"{src.stem}.json")
+def read_csv(src: Path) -> tuple[list[str], list[list[str]]]:
+    """Lê um CSV detectando o separador. Retorna (cabeçalho, linhas)."""
     # utf-8-sig remove o BOM que o Excel costuma colocar
     with src.open(encoding="utf-8-sig", newline="") as f:
         sample = f.read(4096)
         f.seek(0)
-        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|") if sample else csv.excel
-        rows = list(csv.DictReader(f, dialect=dialect))
-    dest.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+        except csv.Error:  # uma coluna só, ou arquivo vazio
+            dialect = csv.excel
+        rows = list(csv.reader(f, dialect=dialect))
+    return (rows[0], rows[1:]) if rows else ([], [])
+
+
+def csv_to_json(src: Path, out_dir: Path) -> list[Path]:
+    dest = unique(out_dir / f"{src.stem}.json")
+    header, rows = read_csv(src)
+    records = [dict(zip(header, row)) for row in rows]
+    dest.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
     return [dest]
 
 
